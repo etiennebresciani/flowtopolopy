@@ -104,22 +104,33 @@ def segmentation(flowFile, linesFile):
     append.AddInputData(edges.GetOutput())
     append.Update()
 
-    # Clean points to make sure there are no coincident points
-    clean = vtk.vtkVoxelGrid()
-    clean.SetInputConnection(append.GetOutputPort())
-    clean.SetConfigurationStyleToManual()
-    clean.SetDivisions(Nx, Ny, 1)
-    clean.Update()
+    # Merge exactly coincident points to avoid unnecessary shifts in merge close points
+    mergeExact = vtk.vtkCleanPolyData()
+    mergeExact.SetInputConnection(append.GetOutputPort())
+    mergeExact.Update()
 
-    # Output separatrices with boundary in a file
+    # Merge close points to avoid problems with Delaunay triangulation
+    mergeClose = vtk.vtkVoxelGrid()
+    mergeClose.SetInputConnection(mergeExact.GetOutputPort())
+    mergeClose.SetConfigurationStyleToManual()
+    Nx = math.ceil((bounds[1]-bounds[0]) / (dist/math.sqrt(2)))
+    Ny = math.ceil((bounds[3]-bounds[2]) / (dist/math.sqrt(2)))
+    mergeClose.SetDivisions(Nx, Ny, 1)
+    mergeClose.Update()
+
+    # Output separatrices and boundary points in a file
+    # (first convert vtkPoints into vtkVertex cells so that they can be displayed in Paraview)
+    mergeCloseVertex = vtk.vtkVertexGlyphFilter()
+    mergeCloseVertex.SetInputConnection(mergeClose.GetOutputPort())
+    mergeCloseVertex.Update()
     writer = vtk.vtkXMLPolyDataWriter()
-    writer.SetInputData(clean.GetOutput())
+    writer.SetInputData(mergeCloseVertex.GetOutput())
     writer.SetFileName(filename + "_separatricesPlusBoundary" + ".vtp");
     writer.Write()
 
     # Tessellate
     tess = vtk.vtkDelaunay2D()
-    tess.SetInputConnection(clean.GetOutputPort())
+    tess.SetInputConnection(mergeClose.GetOutputPort())
     tess.Update()
 
     # Color via connected regions
