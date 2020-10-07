@@ -137,12 +137,15 @@ def segmentation(flowFile, linesFile):
     conn = vtk.vtkPolyDataEdgeConnectivityFilter()
     conn.SetInputConnection(tess.GetOutputPort());
     #conn.SetSourceConnection(edges.GetOutputPort())
-    conn.GrowLargeRegionsOn()
-    conn.SetExtractionModeToAllRegions()
-    conn.SetLargeRegionThreshold(dist)
-    conn.ColorRegionsOn()
     conn.BarrierEdgesOn()
-    conn.SetBarrierEdgeLength(0.0, 2*dist)
+    maxBarrierEdgeLength = 2*dist
+    conn.SetBarrierEdgeLength(0.0, maxBarrierEdgeLength)
+    conn.SetExtractionModeToAllRegions()
+    conn.GrowLargeRegionsOn()
+    threshold = maxBarrierEdgeLength**2 / ((bounds[1]-bounds[0])*(bounds[3]-bounds[2]))
+    print('threshold = {}'.format(threshold))
+    conn.SetLargeRegionThreshold(threshold)
+    conn.ColorRegionsOn()
     conn.Update()
 
     # Transform input data to polydata for append to work
