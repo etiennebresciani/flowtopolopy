@@ -195,6 +195,125 @@ def segmentation(flowFile, linesFile):
     writer.SetFileName(filename + "_segmentation" + ".vtp");
     writer.Write()
 
+
+def segmentation_simpler(flowFile, linesFile):
+
+    filename, file_extension = os.path.splitext(flowFile)
+    if (file_extension != ".vti"):
+        raise ValueError("The file extension must be .vti")
+
+    # Read the segmentation line boundaries
+    linesReader = vtk.vtkXMLPolyDataReader()
+    linesReader.SetFileName(linesFile)
+    linesReader.Update()
+    separatrices = linesReader.GetOutput()
+
+    # Get the four corner points from the input image
+    imageReader = vtk.vtkXMLImageDataReader()
+    imageReader.SetFileName(flowFile)
+    imageReader.Update()
+    bounds = imageReader.GetOutput().GetBounds()
+
+    # Find largest distance between two consecutive points
+    dist = 0
+    for c in range(separatrices.GetNumberOfCells()):
+      cell = separatrices.GetCell(c)
+      for p in range(1, cell.GetNumberOfPoints()):
+        dist = max(dist, vtk.vtkMath.Distance2BetweenPoints(separatrices.GetPoint(cell.GetPointId(p)), separatrices.GetPoint(cell.GetPointId(p-1))))
+    dist = math.sqrt(dist)
+    print('dist = {}'.format(dist))
+
+    # Construct a bounding array of points to improve the tessellation process.
+    plane = vtk.vtkPlaneSource()
+    Nx = math.ceil((bounds[1]-bounds[0]) / dist)
+    Ny = math.ceil((bounds[3]-bounds[2]) / dist)
+    plane.SetResolution(Nx, Ny)
+    plane.SetOrigin(bounds[0], bounds[2], 0.0)
+    plane.SetPoint1(bounds[1], bounds[2], 0.0)
+    plane.SetPoint2(bounds[0], bounds[3], 0.0)
+
+    # Extract edges
+    edges = vtk.vtkFeatureEdges()
+    edges.SetInputConnection(plane.GetOutputPort())
+    edges.ExtractAllEdgeTypesOff()
+    edges.BoundaryEdgesOn()
+    edges.Update()
+
+    # Append separatrices and boundary points
+    append = vtk.vtkAppendPolyData()
+    append.AddInputData(separatrices)
+    append.AddInputData(edges.GetOutput())
+    append.Update()
+
+    # Merge exactly coincident points to avoid unnecessary shifts in merge close points
+    mergeExact = vtk.vtkCleanPolyData()
+    mergeExact.SetInputConnection(append.GetOutputPort())
+    mergeExact.Update()
+
+    # Merge close points to avoid problems with Delaunay triangulation
+    mergeClose = vtk.vtkVoxelGrid()
+    mergeClose.SetInputConnection(mergeExact.GetOutputPort())
+    mergeClose.SetConfigurationStyleToManual()
+    Nx = math.ceil((bounds[1]-bounds[0]) / (dist/math.sqrt(2)))
+    Ny = math.ceil((bounds[3]-bounds[2]) / (dist/math.sqrt(2)))
+    mergeClose.SetDivisions(Nx, Ny, 1)
+    mergeClose.Update()
+
+    # Output separatrices and boundary points in a file
+    # (first convert vtkPoints into vtkVertex cells so that they can be displayed in Paraview)
+    mergeCloseVertex = vtk.vtkVertexGlyphFilter()
+    mergeCloseVertex.SetInputConnection(mergeClose.GetOutputPort())
+    mergeCloseVertex.Update()
+    writer = vtk.vtkXMLPolyDataWriter()
+    writer.SetInputData(mergeCloseVertex.GetOutput())
+    writer.SetFileName(filename + "_separatricesPlusBoundary" + ".vtp");
+    writer.Write()
+
+    # Extract mesh
+    mesh = vtk.vtkGeometryFilter()
+    mesh.SetInputData(imageReader.GetOutput())
+    mesh.Update()
+
+    # Append mesh
+    append = vtk.vtkAppendPolyData()
+    append.AddInputData(mergeClose.GetOutput())
+    append.AddInputData(mesh.GetOutput())
+    append.Update()
+
+    # Tessellate
+    tess = vtk.vtkDelaunay2D()
+    # tess.SetInputConnection(mergeClose.GetOutputPort())
+    tess.SetInputConnection(append.GetOutputPort())
+    tess.Update()
+
+    # Color via connected regions
+    conn = vtk.vtkPolyDataEdgeConnectivityFilter()
+    conn.SetInputConnection(tess.GetOutputPort());
+    #conn.SetSourceConnection(edges.GetOutputPort())
+    conn.BarrierEdgesOn()
+    maxBarrierEdgeLength = 2*dist
+    conn.SetBarrierEdgeLength(0.0, maxBarrierEdgeLength)
+    conn.SetExtractionModeToAllRegions()
+    conn.GrowLargeRegionsOn()
+    threshold = maxBarrierEdgeLength**2 / ((bounds[1]-bounds[0])*(bounds[3]-bounds[2]))
+    print('threshold = {}'.format(threshold))
+    conn.SetLargeRegionThreshold(threshold)
+    conn.ColorRegionsOn()
+    conn.Update()
+
+    # Interpolate the arrays of the input data to the combined data
+    probe = vtk.vtkProbeFilter()
+    probe.SetInputData(conn.GetOutput())
+    probe.SetSourceData(imageReader.GetOutput())
+    probe.PassCellArraysOn()
+    probe.Update()
+
+    # Output the result in a file
+    writer = vtk.vtkXMLPolyDataWriter()
+    writer.SetInputData(probe.GetOutput())
+    writer.SetFileName(filename + "_segmentation" + ".vtp");
+    writer.Write()
+
 def transects(segmentationFile, linesFile):
 
     filename, file_extension = os.path.splitext(segmentationFile)
