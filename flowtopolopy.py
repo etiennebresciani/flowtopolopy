@@ -2,6 +2,7 @@ import vtk # this is the VTK Python wrapping from Kitware
 import math
 import os
 import numpy as np
+import sys
 
 def topology(flowFile, separatrixDist=0.1, integrationStepSize=0.1,
              maxNumSteps=100, computeSurfaces=1, excludeBoundary=0):
@@ -314,7 +315,8 @@ def segmentation_simpler(flowFile, linesFile):
     writer.SetFileName(filename + "_segmentation" + ".vtp");
     writer.Write()
 
-def transects(segmentationFile, linesFile):
+def transects(segmentationFile, linesFile, tol=0.01, integrationStepSize=0.1,
+              maxNumSteps=1000):
 
     filename, file_extension = os.path.splitext(segmentationFile)
 
@@ -330,14 +332,17 @@ def transects(segmentationFile, linesFile):
     linesReader.Update()
     print(linesReader.GetNumberOfPoints())
 
-    # Thin out points on lines to accelerate the process
-    dist = 0.01
-    clean = vtk.vtkVoxelGrid()
-    clean.SetInputConnection(linesReader.GetOutputPort())
-    clean.SetConfigurationStyleToManual()
-    clean.SetDivisions(math.ceil((bounds[1]-bounds[0])/dist), math.ceil((bounds[3]-bounds[2])/dist),1)
-    clean.Update()
-    print(clean.GetOutput().GetNumberOfPoints())
+    # Merge close points on lines to accelerate the process
+    mergeClose = vtk.vtkVoxelGrid()
+    mergeClose.SetInputConnection(linesReader.GetOutputPort())
+    mergeClose.SetConfigurationStyleToManual()
+    dist = tol * segmentationReader.GetOutput().GetLength() # length of bounding box diagonal
+    print('dist = {}'.format(dist))
+    Nx = math.ceil((bounds[1]-bounds[0])/dist)
+    Ny = math.ceil((bounds[3]-bounds[2])/dist)
+    mergeClose.SetDivisions(Nx, Ny, 1)
+    mergeClose.Update()
+    print(mergeClose.GetOutput().GetNumberOfPoints())
 
     # Compute orthogonal flow
     orthogonalFlow = vtk.vtkDoubleArray()
@@ -349,12 +354,6 @@ def transects(segmentationFile, linesFile):
       v = segmentationReader.GetOutput().GetPointData().GetVectors().GetTuple3(p)
       orthogonalFlow.SetTuple3(p, v[1], -v[0], 0)
 
-    #writer = vtk.vtkXMLPolyDataWriter()
-    #writer.SetInputData(segmentationReader.GetOutput())
-    #writer.SetFileName(sys.argv[3]);
-    #writer.Write()
-    #sys.exit()
-
     # Filter to move through the different segments
     threshold = vtk.vtkThreshold()
     threshold.SetInputData(segmentationReader.GetOutput())
@@ -363,8 +362,14 @@ def transects(segmentationFile, linesFile):
     # Filter to compute streamlines
     tracer = vtk.vtkStreamTracer()
     tracer.SetInputData(segmentationReader.GetOutput())
-    tracer.SetSourceData(clean.GetOutput())
-    tracer.SetIntegrationDirectionToForward()
+    tracer.SetSourceData(mergeClose.GetOutput())
+    tracer.SetIntegratorTypeToRungeKutta4()
+    tracer.SetIntegrationDirectionToBoth()
+    tracer.SetIntegrationStepUnit(2); #  2 --> CELL_LENGTH_UNIT
+    tracer.SetInitialIntegrationStep(integrationStepSize)
+    tracer.SetMaximumNumberOfSteps(maxNumSteps)
+    tracer.SetMaximumPropagation(dist * maxNumSteps)
+    tracer.SetComputeVorticity(0)
     tracer.SetInputArrayToProcess(0, 0, 0, 0, 'orthogonalFlow')
 
     # Generate output data
@@ -406,7 +411,7 @@ def transects(segmentationFile, linesFile):
           # connect the end of the line to the boundary of the segment
           endPoint = np.array(transects.GetPoint(transects.GetNumberOfPoints() - 1))
           closestPointId = 0
-          closestDist = 1e10
+          closestDist = sys.float_info.max
           for p in range(linesReader.GetOutput().GetNumberOfPoints()):
             point = linesReader.GetOutput().GetPoint(p)
             if closestDist > np.linalg.norm(endPoint - point):

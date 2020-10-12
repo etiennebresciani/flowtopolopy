@@ -13,3 +13,8 @@ ft.topology(flowFile=flowFile, separatrixDist=0.1,
 linesFile = os.path.join(work_folder, 'q_vert_separatrices.vtp')
 ft.segmentation(flowFile=flowFile, linesFile=linesFile)
 # ft.segmentation_simpler(flowFile=flowFile, linesFile=linesFile)
+
+# Transects
+segmentationFile = os.path.join(work_folder, 'q_vert_segmentation.vtp')
+linesFile = os.path.join(work_folder, 'q_vert_separatricesPlusBoundary.vtp')
+ft.transects(segmentationFile=segmentationFile, linesFile=linesFile)
