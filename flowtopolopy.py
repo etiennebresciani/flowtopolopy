@@ -185,10 +185,20 @@ def segmentation(flowFile, linesFile):
     regionId.SetNumberOfTuples(probe.GetOutput().GetNumberOfCells())
     regionId.SetName('RegionId')
     probe.GetOutput().GetCellData().AddArray(regionId)
+    if conn.GetOutput().GetCellData().HasArray('RegionArea'):
+        regionArea = vtk.vtkDoubleArray()
+        regionArea.SetNumberOfTuples(probe.GetOutput().GetNumberOfCells())
+        regionArea.SetName('RegionArea')
+        probe.GetOutput().GetCellData().AddArray(regionArea)
     for c in range(probe.GetOutput().GetNumberOfCells()):
       point = cellCentersFilter.GetOutput().GetPoint(c)
       cell = cellLocator.FindCell(point)
-      if cell > -1: regionId.SetTuple1(c,conn.GetOutput().GetCellData().GetArray('RegionId').GetTuple1(cell))
+      if cell > -1:
+          regId = conn.GetOutput().GetCellData().GetArray('RegionId').GetTuple1(cell)
+          regionId.SetTuple1(c, regId)
+          if conn.GetOutput().GetCellData().HasArray('RegionArea'):
+              regArea = conn.GetOutput().GetCellData().GetArray('RegionArea').GetTuple1(cell)
+              regionArea.SetTuple1(c, regArea)
 
     # Output the result in a file
     writer = vtk.vtkXMLPolyDataWriter()
@@ -378,14 +388,21 @@ def transects(segmentationFile, linesFile, tol=0.01, integrationStepSize=0.1,
     lines = vtk.vtkCellArray()
     transects.SetPoints(points)
     transects.SetLines(lines)
+    transectsRegionId = vtk.vtkDoubleArray()
+    transectsRegionId.SetName('RegionId')
+    transects.GetCellData().AddArray(transectsRegionId)
+    if segmentationReader.GetOutput().GetCellData().HasArray('RegionArea'):
+        transectsRegionArea = vtk.vtkDoubleArray()
+        transectsRegionArea.SetName('RegionArea')
+        transects.GetCellData().AddArray(transectsRegionArea)
 
     # Find longest line orthogonal to flow for each segment and store it in output
-    for id in range(int(segmentationReader.GetOutput().GetCellData().GetArray('RegionId').GetRange()[1])+1):
-    #for id in range(1):
-      threshold.ThresholdBetween(id-0.5, id+0.5)
+    for regId in range(int(segmentationReader.GetOutput().GetCellData().GetArray('RegionId').GetRange()[1])+1):
+    #for regId in range(1):
+      threshold.ThresholdBetween(regId-0.5, regId+0.5)
       threshold.Update()
       if threshold.GetOutput().GetNumberOfPoints() > 0:
-        print(id, threshold.GetOutput().GetNumberOfPoints())
+        print(regId, threshold.GetOutput().GetNumberOfPoints())
         tracer.SetInputData(threshold.GetOutput())
         tracer.Update()
         longestLineId = 0
@@ -421,6 +438,10 @@ def transects(segmentationFile, linesFile, tol=0.01, integrationStepSize=0.1,
           newLine.GetPointIds().SetId(newLine.GetPointIds().GetNumberOfIds() - 1, transects.GetNumberOfPoints() - 1)
 
           lines.InsertNextCell(newLine)
+          transectsRegionId.InsertNextTuple1(regId)
+          if segmentationReader.GetOutput().GetCellData().HasArray('RegionArea'):
+              regArea = threshold.GetOutput().GetCellData().GetArray('RegionArea').GetTuple1(0) # simply look at the first cell
+              transectsRegionArea.InsertNextTuple1(regArea)
 
     # Output the result in a file
     writer = vtk.vtkXMLPolyDataWriter()
