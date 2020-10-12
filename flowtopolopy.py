@@ -428,7 +428,7 @@ def transects(segmentationFile, linesFile, tol=0.01, integrationStepSize=0.1,
             points.InsertNextPoint(tracer.GetOutput().GetPoint(longestLine.GetPointId(p)))
             newLine.GetPointIds().SetId(p, transects.GetNumberOfPoints() - 1)
 
-          # connect the end of the line to the boundary of the segment
+          # Connect the end of the line to the boundary of the segment
           endPoint = np.array(transects.GetPoint(transects.GetNumberOfPoints() - 1))
           closestPointId = 0
           closestDist = sys.float_info.max
@@ -440,14 +440,22 @@ def transects(segmentationFile, linesFile, tol=0.01, integrationStepSize=0.1,
           points.InsertNextPoint(linesReader.GetOutput().GetPoint(closestPointId))
           newLine.GetPointIds().SetId(newLine.GetPointIds().GetNumberOfIds() - 1, transects.GetNumberOfPoints() - 1)
 
+          # Assign the output
           lines.InsertNextCell(newLine)
           transectsRegionId.InsertNextTuple1(regId)
           if segmentationReader.GetOutput().GetCellData().HasArray('RegionArea'):
               regArea = threshold.GetOutput().GetCellData().GetArray('RegionArea').GetTuple1(0) # simply look at the first cell
               transectsRegionArea.InsertNextTuple1(regArea)
 
+    # Probe the velocity along the transect
+    probe = vtk.vtkProbeFilter()
+    probe.SetInputData(transects)
+    probe.SetSourceData(segmentationReader.GetOutput())
+    probe.PassCellArraysOn()
+    probe.Update()
+
     # Output the result in a file
     writer = vtk.vtkXMLPolyDataWriter()
-    writer.SetInputData(transects)
+    writer.SetInputData(probe.GetOutput())
     writer.SetFileName(filename + "_transects" + ".vtp");
     writer.Write()
