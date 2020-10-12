@@ -408,6 +408,9 @@ def transects(segmentationFile, linesFile, tol=0.01, integrationStepSize=0.1,
         longestLineId = 0
         longestLength = 0
         for c in range(tracer.GetOutput().GetNumberOfCells()):
+          # ReasonForTermination must be 1 (OUT_OF_DOMAIN)
+          if tracer.GetOutput().GetCellData().GetArray('ReasonForTermination').GetTuple1(c) != 1:
+              continue
           polyline = tracer.GetOutput().GetCell(c)
           length = 0
           for p in range(polyline.GetPointIds().GetNumberOfIds()-1):
