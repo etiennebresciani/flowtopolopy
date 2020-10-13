@@ -208,7 +208,6 @@ def segmentation(flowFile, linesFile):
     writer.SetFileName(filename + "_segmentation" + ".vtp");
     writer.Write()
 
-
 def segmentation_simpler(flowFile, linesFile):
 
     filename, file_extension = os.path.splitext(flowFile)
@@ -458,7 +457,7 @@ def transects(segmentationFile, linesFile, tol=0.01, integrationStepSize=0.1,
     transects = probe.GetOutput()
     transects.GetPointData().RemoveArray('orthogonalFlow')
 
-    # Calculate the cumulative flow distribution and along the transects
+    # Calculate the cumulative flow distribution along the transects
     transectsQcumul = vtk.vtkDoubleArray()
     transectsQcumul.SetName('FlowRateCumul')
     transectsQcumul.SetNumberOfTuples(transects.GetNumberOfPoints())
@@ -477,7 +476,13 @@ def transects(segmentationFile, linesFile, tol=0.01, integrationStepSize=0.1,
             d = np.linalg.norm(p2 - p1)
             v1 = transects.GetPointData().GetVectors().GetTuple3(cell.GetPointId(p))
             v2 = transects.GetPointData().GetVectors().GetTuple3(cell.GetPointId(p+1))
-            Qcumul += 0.5 * d * (np.linalg.norm(v1)+np.linalg.norm(v2))
+            if transects.GetPointData().HasArray('thickness'):
+                thick1 = transects.GetPointData().GetArray('thickness').GetTuple1(cell.GetPointId(p))
+                thick2 = transects.GetPointData().GetArray('thickness').GetTuple1(cell.GetPointId(p+1))
+            else:
+                thick1 = 1.
+                thick2 = 1.
+            Qcumul += 0.5 * d * (np.linalg.norm(v1)*thick1 + np.linalg.norm(v2)*thick2)
             transectsQcumul.SetTuple1(cell.GetPointId(p+1), Qcumul)
         transectsQtot.SetTuple1(c, Qcumul)
 
