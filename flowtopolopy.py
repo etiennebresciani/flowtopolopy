@@ -497,18 +497,21 @@ def transects(segmentationFile, linesFile, tol=0.01, integrationStepSize=0.1,
     RegionVolume = np.zeros([segmentationReader.GetOutput().GetNumberOfCells()])
     RegionId = segmentationReader.GetOutput().GetCellData().GetArray('RegionId')
     RegionId = vtk_to_numpy(RegionId)
+    if not segmentationReader.GetOutput().GetPointData().HasArray('thickness'):
+        # if the input data do not have 'thickness', pretend thickness = 1
+        thickness = np.ones(segmentationReader.GetOutput().GetNumberOfPoints())
+        thickness = numpy_to_vtk(thickness)
+        thickness.SetName('thickness')
+        segmentationReader.GetOutput().GetPointData().AddArray(thickness)
     for c in range(transects.GetNumberOfCells()):
         regId = transects.GetCellData().GetArray('RegionId').GetTuple1(c)
         RegionFlowRate[RegionId==regId] = transects.GetCellData().GetArray('FlowRate').GetTuple1(c)
-        if transects.GetPointData().HasArray('thickness'):
-            threshold.ThresholdBetween(regId-0.5, regId+0.5)
-            threshold.Update()
-            integrate = vtk.vtkIntegrateAttributes()
-            integrate.AddInputConnection(threshold.GetOutputPort())
-            integrate.Update()
-            RegionVolume[RegionId==regId] = integrate.GetOutput().GetPointData().GetArray('thickness').GetTuple1(0)
-        else:
-            RegionVolume[RegionId==regId] = transects.GetCellData().GetArray('RegionArea').GetTuple1(c)
+        threshold.ThresholdBetween(regId-0.5, regId+0.5)
+        threshold.Update()
+        integrate = vtk.vtkIntegrateAttributes()
+        integrate.AddInputConnection(threshold.GetOutputPort())
+        integrate.Update()
+        RegionVolume[RegionId==regId] = integrate.GetOutput().GetPointData().GetArray('thickness').GetTuple1(0)
     RegionFlowRate = numpy_to_vtk(RegionFlowRate)
     RegionFlowRate.SetName('RegionFlowRate')
     segmentationReader.GetOutput().GetCellData().AddArray(RegionFlowRate)
