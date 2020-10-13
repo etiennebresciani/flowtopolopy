@@ -1,4 +1,6 @@
 import vtk # this is the VTK Python wrapping from Kitware
+from vtk.util.numpy_support import vtk_to_numpy
+from vtk.util.numpy_support import numpy_to_vtk
 import math
 import os
 import numpy as np
@@ -447,15 +449,58 @@ def transects(segmentationFile, linesFile, tol=0.01, integrationStepSize=0.1,
               regArea = threshold.GetOutput().GetCellData().GetArray('RegionArea').GetTuple1(0) # simply look at the first cell
               transectsRegionArea.InsertNextTuple1(regArea)
 
-    # Probe the velocity along the transect
+    # Probe the velocity along the transects
     probe = vtk.vtkProbeFilter()
     probe.SetInputData(transects)
     probe.SetSourceData(segmentationReader.GetOutput())
     probe.PassCellArraysOn()
     probe.Update()
+    transects = probe.GetOutput()
+    transects.GetPointData().RemoveArray('orthogonalFlow')
+
+    # Calculate the cumulative flow distribution and along the transects
+    transectsQcumul = vtk.vtkDoubleArray()
+    transectsQcumul.SetName('FlowRateCumul')
+    transectsQcumul.SetNumberOfTuples(transects.GetNumberOfPoints())
+    transects.GetPointData().AddArray(transectsQcumul)
+    transectsQtot = vtk.vtkDoubleArray()
+    transectsQtot.SetName('FlowRate')
+    transectsQtot.SetNumberOfTuples(transects.GetNumberOfCells())
+    transects.GetCellData().AddArray(transectsQtot)
+    for c in range(transects.GetNumberOfCells()):
+        cell = transects.GetCell(c)
+        Qcumul = 0.
+        transectsQcumul.SetTuple1(cell.GetPointId(0), Qcumul) # first point
+        for p in range(cell.GetNumberOfPoints() - 1):
+            p1 = np.array(transects.GetPoint(cell.GetPointId(p)))
+            p2 = np.array(transects.GetPoint(cell.GetPointId(p+1)))
+            d = np.linalg.norm(p2 - p1)
+            v1 = transects.GetPointData().GetVectors().GetTuple3(cell.GetPointId(p))
+            v2 = transects.GetPointData().GetVectors().GetTuple3(cell.GetPointId(p+1))
+            Qcumul += 0.5 * d * (np.linalg.norm(v1)+np.linalg.norm(v2))
+            transectsQcumul.SetTuple1(cell.GetPointId(p+1), Qcumul)
+        transectsQtot.SetTuple1(c, Qcumul)
 
     # Output the result in a file
     writer = vtk.vtkXMLPolyDataWriter()
-    writer.SetInputData(probe.GetOutput())
+    writer.SetInputData(transects)
     writer.SetFileName(filename + "_transects" + ".vtp");
+    writer.Write()
+
+    # Add region flow rate info to the segmentation file
+    RegionFlowRate = np.zeros([segmentationReader.GetOutput().GetNumberOfCells()])
+    RegionId = segmentationReader.GetOutput().GetCellData().GetArray('RegionId')
+    RegionId = vtk_to_numpy(RegionId)
+    for c in range(transects.GetNumberOfCells()):
+        regId = transects.GetCellData().GetArray('RegionId').GetTuple1(c)
+        RegionFlowRate[RegionId==regId] = transects.GetCellData().GetArray('FlowRate').GetTuple1(c)
+    RegionFlowRate = numpy_to_vtk(RegionFlowRate)
+    RegionFlowRate.SetName('RegionFlowRate')
+    segmentationReader.GetOutput().GetCellData().AddArray(RegionFlowRate)
+
+    # Overwrite the segmentation file
+    segmentationReader.GetOutput().GetPointData().RemoveArray('orthogonalFlow')
+    writer = vtk.vtkXMLPolyDataWriter()
+    writer.SetInputData(segmentationReader.GetOutput())
+    writer.SetFileName(segmentationFile)
     writer.Write()
