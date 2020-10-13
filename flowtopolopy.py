@@ -492,16 +492,33 @@ def transects(segmentationFile, linesFile, tol=0.01, integrationStepSize=0.1,
     writer.SetFileName(filename + "_transects" + ".vtp");
     writer.Write()
 
-    # Add region flow rate info to the segmentation file
+    # Add region flow rate and mean residence time info to the segmentation file
     RegionFlowRate = np.zeros([segmentationReader.GetOutput().GetNumberOfCells()])
+    RegionVolume = np.zeros([segmentationReader.GetOutput().GetNumberOfCells()])
     RegionId = segmentationReader.GetOutput().GetCellData().GetArray('RegionId')
     RegionId = vtk_to_numpy(RegionId)
     for c in range(transects.GetNumberOfCells()):
         regId = transects.GetCellData().GetArray('RegionId').GetTuple1(c)
         RegionFlowRate[RegionId==regId] = transects.GetCellData().GetArray('FlowRate').GetTuple1(c)
+        if transects.GetPointData().HasArray('thickness'):
+            threshold.ThresholdBetween(regId-0.5, regId+0.5)
+            threshold.Update()
+            integrate = vtk.vtkIntegrateAttributes()
+            integrate.AddInputConnection(threshold.GetOutputPort())
+            integrate.Update()
+            RegionVolume[RegionId==regId] = integrate.GetOutput().GetPointData().GetArray('thickness').GetTuple1(0)
+        else:
+            RegionVolume[RegionId==regId] = transects.GetCellData().GetArray('RegionArea').GetTuple1(c)
     RegionFlowRate = numpy_to_vtk(RegionFlowRate)
     RegionFlowRate.SetName('RegionFlowRate')
     segmentationReader.GetOutput().GetCellData().AddArray(RegionFlowRate)
+    RegionMeanResidenceTime = RegionVolume / RegionFlowRate
+    RegionVolume = numpy_to_vtk(RegionVolume)
+    RegionVolume.SetName('RegionVolume')
+    segmentationReader.GetOutput().GetCellData().AddArray(RegionVolume)
+    RegionMeanResidenceTime = numpy_to_vtk(RegionMeanResidenceTime)
+    RegionMeanResidenceTime.SetName('RegionMeanResidenceTime')
+    segmentationReader.GetOutput().GetCellData().AddArray(RegionMeanResidenceTime)
 
     # Overwrite the segmentation file
     segmentationReader.GetOutput().GetPointData().RemoveArray('orthogonalFlow')
