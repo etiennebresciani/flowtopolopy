@@ -85,6 +85,20 @@ def segmentation(flowFile, linesFile):
     dist = math.sqrt(dist)
     print('dist = {}'.format(dist))
 
+    # Merge close points to avoid problems with Delaunay triangulation
+    mergeClose = vtk.vtkCleanPolyData()
+    mergeClose.SetInputData(separatrices)
+    mergeClose.ToleranceIsAbsoluteOn()
+    mergeClose.SetAbsoluteTolerance(dist)
+    mergeClose.Update()
+    separatrices = mergeClose.GetOutput()
+
+    # Save the "clean" separatrices in a file (useful for transects)
+    writer = vtk.vtkXMLPolyDataWriter()
+    writer.SetInputData(separatrices)
+    writer.SetFileName(filename + "_separatricesClean" + ".vtp");
+    writer.Write()
+
     # Construct a bounding array of points to improve the tessellation process.
     plane = vtk.vtkPlaneSource()
     Nx = math.ceil((bounds[1]-bounds[0]) / dist)
@@ -107,27 +121,16 @@ def segmentation(flowFile, linesFile):
     append.AddInputData(edges.GetOutput())
     append.Update()
 
-    # Merge exactly coincident points to avoid unnecessary shifts in merge close points
-    mergeExact = vtk.vtkCleanPolyData()
-    mergeExact.SetInputConnection(append.GetOutputPort())
-    mergeExact.Update()
-
-    # Merge close points to avoid problems with Delaunay triangulation
-    mergeClose = vtk.vtkVoxelGrid()
-    mergeClose.SetInputConnection(mergeExact.GetOutputPort())
-    mergeClose.SetConfigurationStyleToManual()
-    Nx = math.ceil((bounds[1]-bounds[0]) / (dist/math.sqrt(2)))
-    Ny = math.ceil((bounds[3]-bounds[2]) / (dist/math.sqrt(2)))
-    mergeClose.SetDivisions(Nx, Ny, 1)
+    # Merge again close points to avoid problems with Delaunay triangulation
+    mergeClose = vtk.vtkCleanPolyData()
+    mergeClose.SetInputConnection(append.GetOutputPort())
+    mergeClose.ToleranceIsAbsoluteOn()
+    mergeClose.SetAbsoluteTolerance(0.5*dist)
     mergeClose.Update()
 
     # Output separatrices and boundary points in a file
-    # (first convert vtkPoints into vtkVertex cells so that they can be displayed in Paraview)
-    mergeCloseVertex = vtk.vtkVertexGlyphFilter()
-    mergeCloseVertex.SetInputConnection(mergeClose.GetOutputPort())
-    mergeCloseVertex.Update()
     writer = vtk.vtkXMLPolyDataWriter()
-    writer.SetInputData(mergeCloseVertex.GetOutput())
+    writer.SetInputData(mergeClose.GetOutput())
     writer.SetFileName(filename + "_separatricesPlusBoundary" + ".vtp");
     writer.Write()
 
@@ -235,6 +238,20 @@ def segmentation_simpler(flowFile, linesFile):
     dist = math.sqrt(dist)
     print('dist = {}'.format(dist))
 
+    # Merge close points to avoid problems with Delaunay triangulation
+    mergeClose = vtk.vtkCleanPolyData()
+    mergeClose.SetInputData(separatrices)
+    mergeClose.ToleranceIsAbsoluteOn()
+    mergeClose.SetAbsoluteTolerance(dist)
+    mergeClose.Update()
+    separatrices = mergeClose.GetOutput()
+
+    # Save the "clean" separatrices in a file (useful for transects)
+    writer = vtk.vtkXMLPolyDataWriter()
+    writer.SetInputData(separatrices)
+    writer.SetFileName(filename + "_separatricesClean" + ".vtp");
+    writer.Write()
+
     # Construct a bounding array of points to improve the tessellation process.
     plane = vtk.vtkPlaneSource()
     Nx = math.ceil((bounds[1]-bounds[0]) / dist)
@@ -257,27 +274,16 @@ def segmentation_simpler(flowFile, linesFile):
     append.AddInputData(edges.GetOutput())
     append.Update()
 
-    # Merge exactly coincident points to avoid unnecessary shifts in merge close points
-    mergeExact = vtk.vtkCleanPolyData()
-    mergeExact.SetInputConnection(append.GetOutputPort())
-    mergeExact.Update()
-
-    # Merge close points to avoid problems with Delaunay triangulation
-    mergeClose = vtk.vtkVoxelGrid()
-    mergeClose.SetInputConnection(mergeExact.GetOutputPort())
-    mergeClose.SetConfigurationStyleToManual()
-    Nx = math.ceil((bounds[1]-bounds[0]) / (dist/math.sqrt(2)))
-    Ny = math.ceil((bounds[3]-bounds[2]) / (dist/math.sqrt(2)))
-    mergeClose.SetDivisions(Nx, Ny, 1)
+    # Merge again close points to avoid problems with Delaunay triangulation
+    mergeClose = vtk.vtkCleanPolyData()
+    mergeClose.SetInputConnection(append.GetOutputPort())
+    mergeClose.ToleranceIsAbsoluteOn()
+    mergeClose.SetAbsoluteTolerance(0.5*dist)
     mergeClose.Update()
 
     # Output separatrices and boundary points in a file
-    # (first convert vtkPoints into vtkVertex cells so that they can be displayed in Paraview)
-    mergeCloseVertex = vtk.vtkVertexGlyphFilter()
-    mergeCloseVertex.SetInputConnection(mergeClose.GetOutputPort())
-    mergeCloseVertex.Update()
     writer = vtk.vtkXMLPolyDataWriter()
-    writer.SetInputData(mergeCloseVertex.GetOutput())
+    writer.SetInputData(mergeClose.GetOutput())
     writer.SetFileName(filename + "_separatricesPlusBoundary" + ".vtp");
     writer.Write()
 
@@ -335,25 +341,20 @@ def transects(segmentationFile, linesFile, tol=0.01, integrationStepSize=0.1,
     segmentationReader = vtk.vtkXMLPolyDataReader()
     segmentationReader.SetFileName(segmentationFile)
     segmentationReader.Update()
-    bounds = segmentationReader.GetOutput().GetBounds()
 
-    # Read the lines
+    # Read the separatrices
     linesReader = vtk.vtkXMLPolyDataReader()
     linesReader.SetFileName(linesFile)
     linesReader.Update()
-    print(linesReader.GetNumberOfPoints())
 
     # Merge close points on lines to accelerate the process
-    mergeClose = vtk.vtkVoxelGrid()
-    mergeClose.SetInputConnection(linesReader.GetOutputPort())
-    mergeClose.SetConfigurationStyleToManual()
     dist = tol * segmentationReader.GetOutput().GetLength() # length of bounding box diagonal
     print('dist = {}'.format(dist))
-    Nx = math.ceil((bounds[1]-bounds[0])/dist)
-    Ny = math.ceil((bounds[3]-bounds[2])/dist)
-    mergeClose.SetDivisions(Nx, Ny, 1)
+    mergeClose = vtk.vtkCleanPolyData()
+    mergeClose.SetInputConnection(linesReader.GetOutputPort())
+    mergeClose.ToleranceIsAbsoluteOn()
+    mergeClose.SetAbsoluteTolerance(dist)
     mergeClose.Update()
-    print(mergeClose.GetOutput().GetNumberOfPoints())
 
     # Compute orthogonal flow
     orthogonalFlow = vtk.vtkDoubleArray()
@@ -362,8 +363,8 @@ def transects(segmentationFile, linesFile, tol=0.01, integrationStepSize=0.1,
     orthogonalFlow.SetName('orthogonalFlow')
     segmentationReader.GetOutput().GetPointData().AddArray(orthogonalFlow)
     for p in range(segmentationReader.GetOutput().GetNumberOfPoints()):
-      v = segmentationReader.GetOutput().GetPointData().GetVectors().GetTuple3(p)
-      orthogonalFlow.SetTuple3(p, v[1], -v[0], 0)
+        v = segmentationReader.GetOutput().GetPointData().GetVectors().GetTuple3(p)
+        orthogonalFlow.SetTuple3(p, v[1], -v[0], 0)
 
     # Filter to move through the different segments
     threshold = vtk.vtkThreshold()
@@ -392,6 +393,12 @@ def transects(segmentationFile, linesFile, tol=0.01, integrationStepSize=0.1,
     transectsRegionId = vtk.vtkDoubleArray()
     transectsRegionId.SetName('RegionId')
     transects.GetCellData().AddArray(transectsRegionId)
+    transectsRegionFlowRate = vtk.vtkDoubleArray()
+    transectsRegionFlowRate.SetName('RegionFlowRate')
+    transects.GetCellData().AddArray(transectsRegionFlowRate)
+    transectsQcumul = vtk.vtkDoubleArray()
+    transectsQcumul.SetName('Qcumul')
+    transects.GetPointData().AddArray(transectsQcumul)
     if segmentationReader.GetOutput().GetCellData().HasArray('RegionArea'):
         transectsRegionArea = vtk.vtkDoubleArray()
         transectsRegionArea.SetName('RegionArea')
@@ -399,98 +406,102 @@ def transects(segmentationFile, linesFile, tol=0.01, integrationStepSize=0.1,
 
     # Find longest line orthogonal to flow for each segment and store it in output
     for regId in range(int(segmentationReader.GetOutput().GetCellData().GetArray('RegionId').GetRange()[1])+1):
-    #for regId in range(1):
-      threshold.ThresholdBetween(regId-0.5, regId+0.5)
-      threshold.Update()
-      if threshold.GetOutput().GetNumberOfPoints() > 0:
-        print(regId, threshold.GetOutput().GetNumberOfPoints())
-        tracer.SetInputData(threshold.GetOutput())
-        tracer.Update()
-        longestLineId = 0
-        longestLength = 0
-        for c in range(tracer.GetOutput().GetNumberOfCells()):
-          # ReasonForTermination must be 1 (OUT_OF_DOMAIN)
-          if tracer.GetOutput().GetCellData().GetArray('ReasonForTermination').GetTuple1(c) != 1:
-              continue
-          polyline = tracer.GetOutput().GetCell(c)
-          length = 0
-          for p in range(polyline.GetPointIds().GetNumberOfIds()-1):
-            p0 = np.array(tracer.GetOutput().GetPoint(polyline.GetPointId(p)))
-            p1 = np.array(tracer.GetOutput().GetPoint(polyline.GetPointId(p+1)))
-            length = length + np.linalg.norm(p1-p0)
-          if longestLength < length:
-            longestLength = length
-            longestLineId = c
-        if longestLength > 0:
-          longestLine = tracer.GetOutput().GetCell(longestLineId)
-          newLine = vtk.vtkPolyLine()
-          newLine.GetPointIds().SetNumberOfIds(longestLine.GetPointIds().GetNumberOfIds() + 1)
-          for p in range(longestLine.GetPointIds().GetNumberOfIds()):
-            points.InsertNextPoint(tracer.GetOutput().GetPoint(longestLine.GetPointId(p)))
-            newLine.GetPointIds().SetId(p, transects.GetNumberOfPoints() - 1)
+    # for regId in range(5, 6):
+        threshold.ThresholdBetween(regId-0.5, regId+0.5)
+        threshold.Update()
+        if threshold.GetOutput().GetNumberOfPoints() > 0:
+            # Orthogonal streamline tracing
+            print(regId, threshold.GetOutput().GetNumberOfPoints())
+            tracer.SetInputData(threshold.GetOutput())
+            tracer.Update()
 
-          # Connect the end of the line to the boundary of the segment
-          endPoint = np.array(transects.GetPoint(transects.GetNumberOfPoints() - 1))
-          closestPointId = 0
-          closestDist = sys.float_info.max
-          for p in range(linesReader.GetOutput().GetNumberOfPoints()):
-            point = linesReader.GetOutput().GetPoint(p)
-            if closestDist > np.linalg.norm(endPoint - point):
-              closestDist = np.linalg.norm(endPoint - point)
-              closestPointId = p
-          points.InsertNextPoint(linesReader.GetOutput().GetPoint(closestPointId))
-          newLine.GetPointIds().SetId(newLine.GetPointIds().GetNumberOfIds() - 1, transects.GetNumberOfPoints() - 1)
+            # Probe the velocity along the streamlines
+            probe = vtk.vtkProbeFilter()
+            probe.SetInputData(tracer.GetOutput())
+            probe.SetSourceData(segmentationReader.GetOutput())
+            probe.PassCellArraysOn()
+            probe.Update()
+            streamlines = probe.GetOutput()
+            # writer = vtk.vtkXMLPolyDataWriter()
+            # writer.SetInputData(streamlines)
+            # writer.SetFileName(filename + "_regionAllTransects" + ".vtp");
+            # writer.Write()
+            # return
 
-          # Assign the output
-          lines.InsertNextCell(newLine)
-          transectsRegionId.InsertNextTuple1(regId)
-          if segmentationReader.GetOutput().GetCellData().HasArray('RegionArea'):
-              regArea = threshold.GetOutput().GetCellData().GetArray('RegionArea').GetTuple1(0) # simply look at the first cell
-              transectsRegionArea.InsertNextTuple1(regArea)
+            # Find longest line or line with the largest flow rate
+            longestLineId = 0
+            longestLength = 0
+            longestLineQ = 0
+            largestQLineId = 0
+            largestQ = 0
+            Qall = np.empty(streamlines.GetNumberOfCells())
+            Qall[:] = np.nan
+            for c in range(streamlines.GetNumberOfCells()):
+                # ReasonForTermination must be 1 (OUT_OF_DOMAIN)
+                if streamlines.GetCellData().GetArray('ReasonForTermination').GetTuple1(c) != 1:
+                    continue
+                polyline = streamlines.GetCell(c)
+                # Calculate transect length
+                length = 0
+                for p in range(polyline.GetNumberOfPoints()-1):
+                    p0 = np.array(streamlines.GetPoint(polyline.GetPointId(p)))
+                    p1 = np.array(streamlines.GetPoint(polyline.GetPointId(p+1)))
+                    length = length + np.linalg.norm(p1-p0)
+                # Discard short streamlines that may be due to seed points moved during merge
+                # if length < 0.5*np.sqrt(2)*dist:
+                #     continue
+                if longestLength < length:
+                    longestLength = length
+                    longestLineId = c
+                # Calculate cumulative flow rate across the streamline
+                Qcumul = np.zeros(polyline.GetNumberOfPoints())
+                for p in range(polyline.GetNumberOfPoints() - 1):
+                    p0 = np.array(streamlines.GetPoint(polyline.GetPointId(p)))
+                    p1 = np.array(streamlines.GetPoint(polyline.GetPointId(p+1)))
+                    d = np.linalg.norm(p1 - p0)
+                    v0 = streamlines.GetPointData().GetVectors().GetTuple3(polyline.GetPointId(p))
+                    v1 = streamlines.GetPointData().GetVectors().GetTuple3(polyline.GetPointId(p+1))
+                    if streamlines.GetPointData().HasArray('thickness'):
+                        thick0 = streamlines.GetPointData().GetArray('thickness').GetTuple1(polyline.GetPointId(p))
+                        thick1 = streamlines.GetPointData().GetArray('thickness').GetTuple1(polyline.GetPointId(p+1))
+                    else:
+                        thick0 = 1.
+                        thick1 = 1.
+                    Qcumul[p+1] = Qcumul[p] + 0.5 * d * (np.linalg.norm(v0)*thick0 + np.linalg.norm(v1)*thick1)
+                Q = Qcumul[-1]
+                Qall[c] = Q
+                if largestQ < Q:
+                    largestQ = Q
+                    largestQLineId = c
+                    largestQLineQcumul = Qcumul
+                if longestLineId == c:
+                    longestLineQ = Q
+                    longestLineQcumul = Qcumul
 
-    # Probe the velocity along the transects
-    probe = vtk.vtkProbeFilter()
-    probe.SetInputData(transects)
-    probe.SetSourceData(segmentationReader.GetOutput())
-    probe.PassCellArraysOn()
-    probe.Update()
-    transects = probe.GetOutput()
-    transects.GetPointData().RemoveArray('orthogonalFlow')
-
-    # Calculate the cumulative flow distribution along the transects
-    transectsQcumul = vtk.vtkDoubleArray()
-    transectsQcumul.SetName('FlowRateCumul')
-    transectsQcumul.SetNumberOfTuples(transects.GetNumberOfPoints())
-    transects.GetPointData().AddArray(transectsQcumul)
-    transectsQtot = vtk.vtkDoubleArray()
-    transectsQtot.SetName('FlowRate')
-    transectsQtot.SetNumberOfTuples(transects.GetNumberOfCells())
-    transects.GetCellData().AddArray(transectsQtot)
-    for c in range(transects.GetNumberOfCells()):
-        cell = transects.GetCell(c)
-        Qcumul = 0.
-        transectsQcumul.SetTuple1(cell.GetPointId(0), Qcumul) # first point
-        for p in range(cell.GetNumberOfPoints() - 1):
-            p1 = np.array(transects.GetPoint(cell.GetPointId(p)))
-            p2 = np.array(transects.GetPoint(cell.GetPointId(p+1)))
-            d = np.linalg.norm(p2 - p1)
-            v1 = transects.GetPointData().GetVectors().GetTuple3(cell.GetPointId(p))
-            v2 = transects.GetPointData().GetVectors().GetTuple3(cell.GetPointId(p+1))
-            if transects.GetPointData().HasArray('thickness'):
-                thick1 = transects.GetPointData().GetArray('thickness').GetTuple1(cell.GetPointId(p))
-                thick2 = transects.GetPointData().GetArray('thickness').GetTuple1(cell.GetPointId(p+1))
-            else:
-                thick1 = 1.
-                thick2 = 1.
-            Qcumul += 0.5 * d * (np.linalg.norm(v1)*thick1 + np.linalg.norm(v2)*thick2)
-            transectsQcumul.SetTuple1(cell.GetPointId(p+1), Qcumul)
-        transectsQtot.SetTuple1(c, Qcumul)
-
-    # Output the result in a file
-    writer = vtk.vtkXMLPolyDataWriter()
-    writer.SetInputData(transects)
-    writer.SetFileName(filename + "_transects" + ".vtp");
-    writer.Write()
+            # Assign the output
+            if longestLength > 0:
+                Q_CV = np.nanstd(Qall) / np.nanmean(Qall)
+                print('Q_CV = {}'.format(Q_CV))
+                if Q_CV > 0.1:
+                    bestLine = streamlines.GetCell(largestQLineId)
+                    Q = largestQ
+                    Qcumul = largestQLineQcumul
+                else:
+                    bestLine = streamlines.GetCell(longestLineId)
+                    Q = longestLineQ
+                    Qcumul = longestLineQcumul
+                newLine = vtk.vtkPolyLine()
+                newLine.GetPointIds().SetNumberOfIds(bestLine.GetNumberOfPoints())
+                for p in range(bestLine.GetNumberOfPoints()):
+                    points.InsertNextPoint(streamlines.GetPoint(bestLine.GetPointId(p)))
+                    newLine.GetPointIds().SetId(p, transects.GetNumberOfPoints() - 1)
+                    transectsQcumul.InsertNextTuple1(Qcumul[p])
+                lines.InsertNextCell(newLine)
+                transectsRegionId.InsertNextTuple1(regId)
+                transectsRegionFlowRate.InsertNextTuple1(Q)
+                if segmentationReader.GetOutput().GetCellData().HasArray('RegionArea'):
+                    regArea = threshold.GetOutput().GetCellData().GetArray('RegionArea').GetTuple1(0) # simply look at the first cell
+                    transectsRegionArea.InsertNextTuple1(regArea)
 
     # Add region flow rate and mean residence time info to the segmentation file
     RegionFlowRate = np.zeros([segmentationReader.GetOutput().GetNumberOfCells()])
@@ -505,17 +516,18 @@ def transects(segmentationFile, linesFile, tol=0.01, integrationStepSize=0.1,
         segmentationReader.GetOutput().GetPointData().AddArray(thickness)
     for c in range(transects.GetNumberOfCells()):
         regId = transects.GetCellData().GetArray('RegionId').GetTuple1(c)
-        RegionFlowRate[RegionId==regId] = transects.GetCellData().GetArray('FlowRate').GetTuple1(c)
+        Q = transects.GetCellData().GetArray('RegionFlowRate').GetTuple1(c)
+        RegionFlowRate[RegionId==regId] = Q
         threshold.ThresholdBetween(regId-0.5, regId+0.5)
         threshold.Update()
         integrate = vtk.vtkIntegrateAttributes()
         integrate.AddInputConnection(threshold.GetOutputPort())
         integrate.Update()
         RegionVolume[RegionId==regId] = integrate.GetOutput().GetPointData().GetArray('thickness').GetTuple1(0)
+    RegionMeanResidenceTime = RegionVolume / RegionFlowRate
     RegionFlowRate = numpy_to_vtk(RegionFlowRate)
     RegionFlowRate.SetName('RegionFlowRate')
     segmentationReader.GetOutput().GetCellData().AddArray(RegionFlowRate)
-    RegionMeanResidenceTime = RegionVolume / RegionFlowRate
     RegionVolume = numpy_to_vtk(RegionVolume)
     RegionVolume.SetName('RegionVolume')
     segmentationReader.GetOutput().GetCellData().AddArray(RegionVolume)
@@ -524,8 +536,22 @@ def transects(segmentationFile, linesFile, tol=0.01, integrationStepSize=0.1,
     segmentationReader.GetOutput().GetCellData().AddArray(RegionMeanResidenceTime)
 
     # Overwrite the segmentation file
-    segmentationReader.GetOutput().GetPointData().RemoveArray('orthogonalFlow')
     writer = vtk.vtkXMLPolyDataWriter()
     writer.SetInputData(segmentationReader.GetOutput())
     writer.SetFileName(segmentationFile)
+    writer.Write()
+
+    # Probe information of the original data along the transects
+    probe = vtk.vtkProbeFilter()
+    probe.SetInputData(transects)
+    probe.SetSourceData(segmentationReader.GetOutput())
+    probe.PassCellArraysOn()
+    probe.PassPointArraysOn()
+    probe.Update()
+    transects = probe.GetOutput()
+
+    # Output the transects in a file
+    writer = vtk.vtkXMLPolyDataWriter()
+    writer.SetInputData(transects)
+    writer.SetFileName(filename + "_transects" + ".vtp");
     writer.Write()
