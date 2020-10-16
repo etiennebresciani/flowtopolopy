@@ -555,3 +555,58 @@ def transects(segmentationFile, linesFile, tol=0.01, integrationStepSize=0.1,
     writer.SetInputData(transects)
     writer.SetFileName(filename + "_transects" + ".vtp");
     writer.Write()
+
+def flow_weighted_spacing(transectsFile, Npts=100):
+
+    filename, file_extension = os.path.splitext(transectsFile)
+
+    # Read the transects
+    reader = vtk.vtkXMLPolyDataReader()
+    reader.SetFileName(transectsFile)
+    reader.Update()
+    transects = reader.GetOutput()
+
+    # Calculate the sum of flow rates of all transects
+    RegionFlowRate = vtk_to_numpy(transects.GetCellData().GetArray('RegionFlowRate'))
+    Qtot = np.sum(RegionFlowRate)
+
+    # Calculate the flow rate between two consecutive points
+    Qinter = Qtot / Npts
+
+    # Prepare output
+    transectsFlowWeighted = vtk.vtkPolyData()
+    points = vtk.vtkPoints()
+    lines = vtk.vtkCellArray()
+    transectsFlowWeighted.SetPoints(points)
+    transectsFlowWeighted.SetVerts(lines)
+
+    # Find points separated by Qinter along each transect
+    for c in range(transects.GetNumberOfCells()):
+        cell = transects.GetCell(c)
+        pointIds = cell.GetPointIds()
+        Qcumul = vtk.vtkDoubleArray()
+        Qcumul.SetNumberOfTuples(cell.GetNumberOfPoints())
+        transects.GetPointData().GetArray('Qcumul').GetTuples(pointIds, Qcumul)
+        Qcumul = vtk_to_numpy(Qcumul)
+        Q = 0.5 * Qinter
+        newLine = vtk.vtkPolyLine()
+        while(Q < Qcumul[-1]):
+            i1 = np.searchsorted(Qcumul, Q)
+            if i1 == len(Qcumul):
+                break
+            i0 = i1 - 1
+            p0 = np.array(transects.GetPoint(cell.GetPointId(i0)))
+            p1 = np.array(transects.GetPoint(cell.GetPointId(i1)))
+            ratio_from_p0 = (Q-Qcumul[i0]) / (Qcumul[i1]-Qcumul[i0])
+            p = p0 + ratio_from_p0*(p1-p0)
+            points.InsertNextPoint(p)
+            newLine.GetPointIds().InsertNextId(transectsFlowWeighted.GetNumberOfPoints() - 1)
+            Q = Q + Qinter
+        if newLine.GetNumberOfPoints() > 0:
+            lines.InsertNextCell(newLine)
+
+    # Output the new transects in a file
+    writer = vtk.vtkXMLPolyDataWriter()
+    writer.SetInputData(transectsFlowWeighted)
+    writer.SetFileName(filename + "FlowWeighted" + ".vtp");
+    writer.Write()

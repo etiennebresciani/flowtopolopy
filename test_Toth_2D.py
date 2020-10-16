@@ -11,11 +11,14 @@ flowFile = os.path.join(work_folder, 'q_vert.vti')
 
 # Segmentation
 linesFile = os.path.join(work_folder, 'q_vert_separatrices.vtp')
-ft.segmentation(flowFile=flowFile, linesFile=linesFile)
+# ft.segmentation(flowFile=flowFile, linesFile=linesFile)
 # ft.segmentation_simpler(flowFile=flowFile, linesFile=linesFile)
 
 # Transects
 segmentationFile = os.path.join(work_folder, 'q_vert_segmentation.vtp')
 separatricesCleanFile = os.path.join(work_folder, 'q_vert_separatricesClean.vtp')
-ft.transects(segmentationFile=segmentationFile, linesFile=separatricesCleanFile, tol=0.02,
-             integrationStepSize=0.5)
+# ft.transects(segmentationFile=segmentationFile, linesFile=separatricesCleanFile, tol=0.01,
+#              integrationStepSize=0.6)
+
+transectsFile = os.path.join(work_folder, 'q_vert_segmentation_transects.vtp')
+ft.flow_weighted_spacing(transectsFile=transectsFile, Npts=100)
