@@ -9,14 +9,14 @@ import sys
 def topology(flowFile, separatrixDist=0.1, integrationStepSize=0.1,
              maxNumSteps=100, computeSurfaces=1, excludeBoundary=0):
 
-    filename, file_extension = os.path.splitext(flowFile)
-    if file_extension == ".vti":
+    fname, fext = os.path.splitext(flowFile)
+    if fext == ".vti":
         reader = vtk.vtkXMLImageDataReader()
-    elif file_extension == ".vtr":
+    elif fext == ".vtr":
         reader = vtk.vtkXMLRectilinearGridReader()
-    elif file_extension == ".vtu":
+    elif fext == ".vtu":
         reader = vtk.vtkXMLUnstructuredGridReader()
-    elif file_extension == ".vtk":
+    elif fext == ".vtk":
         reader = vtk.vtkUnstructuredGridReader()
     else:
         raise ValueError("File extension not recognized.")
@@ -41,13 +41,13 @@ def topology(flowFile, separatrixDist=0.1, integrationStepSize=0.1,
     # Output the critical points in a file
     writer = vtk.vtkXMLPolyDataWriter()
     writer.SetInputData(topology.GetOutput(0))
-    writer.SetFileName(filename + "_criticalPoints" + ".vtp");
+    writer.SetFileName(fname + "_criticalPoints" + ".vtp");
     writer.Write()
 
     # Output the 1D separatrices in a file
     writer = vtk.vtkXMLPolyDataWriter()
     writer.SetInputData(topology.GetOutput(1))
-    writer.SetFileName(filename + "_separatrices" + ".vtp");
+    writer.SetFileName(fname + "_separatrices" + ".vtp");
     # writer.SetDataModeToAscii()
     writer.Write()
 
@@ -55,13 +55,13 @@ def topology(flowFile, separatrixDist=0.1, integrationStepSize=0.1,
     if(computeSurfaces and reader.GetOutput().GetBounds()[5]-reader.GetOutput().GetBounds()[4] > 1e-10):
         writer = vtk.vtkXMLPolyDataWriter()
         writer.SetInputData(topology.GetOutput(2))
-        writer.SetFileName(filename + "_surfaces" + ".vtp");
+        writer.SetFileName(fname + "_surfaces" + ".vtp");
         writer.Write()
 
 def segmentation(flowFile, linesFile):
 
-    filename, file_extension = os.path.splitext(flowFile)
-    if (file_extension != ".vti"):
+    fname, fext = os.path.splitext(flowFile)
+    if (fext != ".vti"):
         raise ValueError("The file extension must be .vti")
 
     # Read the segmentation line boundaries
@@ -96,7 +96,7 @@ def segmentation(flowFile, linesFile):
     # Save the "clean" separatrices in a file (useful for transects)
     writer = vtk.vtkXMLPolyDataWriter()
     writer.SetInputData(separatrices)
-    writer.SetFileName(filename + "_separatricesClean" + ".vtp");
+    writer.SetFileName(fname + "_separatricesClean" + ".vtp");
     writer.Write()
 
     # Construct a bounding array of points to improve the tessellation process.
@@ -131,7 +131,7 @@ def segmentation(flowFile, linesFile):
     # Output separatrices and boundary points in a file
     writer = vtk.vtkXMLPolyDataWriter()
     writer.SetInputData(mergeClose.GetOutput())
-    writer.SetFileName(filename + "_separatricesPlusBoundary" + ".vtp");
+    writer.SetFileName(fname + "_separatricesPlusBoundary" + ".vtp");
     writer.Write()
 
     # Tessellate
@@ -208,13 +208,13 @@ def segmentation(flowFile, linesFile):
     # Output the result in a file
     writer = vtk.vtkXMLPolyDataWriter()
     writer.SetInputData(probe.GetOutput())
-    writer.SetFileName(filename + "_segmentation" + ".vtp");
+    writer.SetFileName(fname + "_segmentation" + ".vtp");
     writer.Write()
 
 def segmentation_simpler(flowFile, linesFile):
 
-    filename, file_extension = os.path.splitext(flowFile)
-    if (file_extension != ".vti"):
+    fname, fext = os.path.splitext(flowFile)
+    if (fext != ".vti"):
         raise ValueError("The file extension must be .vti")
 
     # Read the segmentation line boundaries
@@ -249,7 +249,7 @@ def segmentation_simpler(flowFile, linesFile):
     # Save the "clean" separatrices in a file (useful for transects)
     writer = vtk.vtkXMLPolyDataWriter()
     writer.SetInputData(separatrices)
-    writer.SetFileName(filename + "_separatricesClean" + ".vtp");
+    writer.SetFileName(fname + "_separatricesClean" + ".vtp");
     writer.Write()
 
     # Construct a bounding array of points to improve the tessellation process.
@@ -284,7 +284,7 @@ def segmentation_simpler(flowFile, linesFile):
     # Output separatrices and boundary points in a file
     writer = vtk.vtkXMLPolyDataWriter()
     writer.SetInputData(mergeClose.GetOutput())
-    writer.SetFileName(filename + "_separatricesPlusBoundary" + ".vtp");
+    writer.SetFileName(fname + "_separatricesPlusBoundary" + ".vtp");
     writer.Write()
 
     # Extract mesh
@@ -329,13 +329,13 @@ def segmentation_simpler(flowFile, linesFile):
     # Output the result in a file
     writer = vtk.vtkXMLPolyDataWriter()
     writer.SetInputData(probe.GetOutput())
-    writer.SetFileName(filename + "_segmentation" + ".vtp");
+    writer.SetFileName(fname + "_segmentation" + ".vtp");
     writer.Write()
 
 def transects(segmentationFile, linesFile, tol=0.01, integrationStepSize=0.1,
-              maxNumSteps=1000):
+              maxNumSteps=1000, terminalSpeed=1e-12):
 
-    filename, file_extension = os.path.splitext(segmentationFile)
+    fname, fext = os.path.splitext(segmentationFile)
 
     # Read the segmentation data
     segmentationReader = vtk.vtkXMLPolyDataReader()
@@ -348,13 +348,15 @@ def transects(segmentationFile, linesFile, tol=0.01, integrationStepSize=0.1,
     linesReader.Update()
 
     # Merge close points on lines to accelerate the process
-    dist = tol * segmentationReader.GetOutput().GetLength() # length of bounding box diagonal
+    diagonal = segmentationReader.GetOutput().GetLength() # length of bounding box diagonal
+    dist = tol * diagonal
     print('dist = {}'.format(dist))
     mergeClose = vtk.vtkCleanPolyData()
     mergeClose.SetInputConnection(linesReader.GetOutputPort())
     mergeClose.ToleranceIsAbsoluteOn()
     mergeClose.SetAbsoluteTolerance(dist)
     mergeClose.Update()
+    # mergeClose = linesReader
 
     # Compute orthogonal flow
     orthogonalFlow = vtk.vtkDoubleArray()
@@ -381,6 +383,7 @@ def transects(segmentationFile, linesFile, tol=0.01, integrationStepSize=0.1,
     tracer.SetInitialIntegrationStep(integrationStepSize)
     tracer.SetMaximumNumberOfSteps(maxNumSteps)
     tracer.SetMaximumPropagation(dist * maxNumSteps)
+    tracer.SetTerminalSpeed(terminalSpeed)
     tracer.SetComputeVorticity(0)
     tracer.SetInputArrayToProcess(0, 0, 0, 0, 'orthogonalFlow')
 
@@ -406,7 +409,7 @@ def transects(segmentationFile, linesFile, tol=0.01, integrationStepSize=0.1,
 
     # Find longest line orthogonal to flow for each segment and store it in output
     for regId in range(int(segmentationReader.GetOutput().GetCellData().GetArray('RegionId').GetRange()[1])+1):
-    # for regId in range(5, 6):
+    # for regId in range(0, 1):
         threshold.ThresholdBetween(regId-0.5, regId+0.5)
         threshold.Update()
         if threshold.GetOutput().GetNumberOfPoints() > 0:
@@ -424,7 +427,7 @@ def transects(segmentationFile, linesFile, tol=0.01, integrationStepSize=0.1,
             streamlines = probe.GetOutput()
             # writer = vtk.vtkXMLPolyDataWriter()
             # writer.SetInputData(streamlines)
-            # writer.SetFileName(filename + "_regionAllTransects" + ".vtp");
+            # writer.SetFileName(fname + "_regionAllTransects" + ".vtp");
             # writer.Write()
             # return
 
@@ -437,8 +440,9 @@ def transects(segmentationFile, linesFile, tol=0.01, integrationStepSize=0.1,
             Qall = np.empty(streamlines.GetNumberOfCells())
             Qall[:] = np.nan
             for c in range(streamlines.GetNumberOfCells()):
-                # ReasonForTermination must be 1 (OUT_OF_DOMAIN)
-                if streamlines.GetCellData().GetArray('ReasonForTermination').GetTuple1(c) != 1:
+                # ReasonForTermination must be 1 (OUT_OF_DOMAIN) or 6 (STAGNATION)
+                termination = streamlines.GetCellData().GetArray('ReasonForTermination').GetTuple1(c)
+                if termination not in (1, 6):
                     continue
                 polyline = streamlines.GetCell(c)
                 # Calculate transect length
@@ -553,12 +557,12 @@ def transects(segmentationFile, linesFile, tol=0.01, integrationStepSize=0.1,
     # Output the transects in a file
     writer = vtk.vtkXMLPolyDataWriter()
     writer.SetInputData(transects)
-    writer.SetFileName(filename + "_transects" + ".vtp");
+    writer.SetFileName(fname + "_transects" + ".vtp");
     writer.Write()
 
 def flow_weighted_spacing(transectsFile, Npts=100):
 
-    filename, file_extension = os.path.splitext(transectsFile)
+    fname, fext = os.path.splitext(transectsFile)
 
     # Read the transects
     reader = vtk.vtkXMLPolyDataReader()
@@ -608,5 +612,5 @@ def flow_weighted_spacing(transectsFile, Npts=100):
     # Output the new transects in a file
     writer = vtk.vtkXMLPolyDataWriter()
     writer.SetInputData(transectsFlowWeighted)
-    writer.SetFileName(filename + "FlowWeighted" + ".vtp");
+    writer.SetFileName(fname + "FlowWeighted" + ".vtp");
     writer.Write()
