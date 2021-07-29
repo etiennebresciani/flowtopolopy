@@ -20,8 +20,9 @@ ft.segmentation(flowFile=flowFile, linesFile=linesFile)
 segmentationFile = os.path.join(work_folder, fname+'_segmentation.vtp')
 separatricesCleanFile = os.path.join(work_folder, fname+'_separatricesClean.vtp')
 ft.transects(segmentationFile=segmentationFile, linesFile=separatricesCleanFile, tol=0.01,
-             integrationStepSize=0.1, maxNumSteps=10000)
+             integrationStepSize=0.1, maxNumSteps=10000, output='longest',
+             colorRegions=True)
 
 # Flow-equally-spaced points along transects
 transectsFile = os.path.join(work_folder, fname+'_segmentation_transects.vtp')
-ft.flow_weighted_spacing(transectsFile=transectsFile, Npts=100)
+ft.flow_weighted_spacing(transectsFile=transectsFile, Npts=50)
