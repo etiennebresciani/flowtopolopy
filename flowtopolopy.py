@@ -4,9 +4,7 @@ from vtk.util.numpy_support import numpy_to_vtk
 import math
 import os
 import numpy as np
-import sys
-
-import matplotlib.pyplot as plt
+# import timeit
 
 def topology(flowFile, separatrixDist=0.1, integrationStepSize=0.1,
              maxNumSteps=100, computeSurfaces=1, excludeBoundary=0, vectorName=None):
@@ -26,6 +24,8 @@ def topology(flowFile, separatrixDist=0.1, integrationStepSize=0.1,
     # Read the flow field
     reader.SetFileName(flowFile)
     reader.Update()
+    
+    # time1 = timeit.default_timer()
 
     # Extract the flow topology
     topology = vtk.vtkVectorFieldTopology()
@@ -41,6 +41,10 @@ def topology(flowFile, separatrixDist=0.1, integrationStepSize=0.1,
         topology.SetInputArrayToProcess(0, 0, 0, vtk.vtkDataObject.FIELD_ASSOCIATION_POINTS, vectorName)
     topology.Update()
     # print(topology)
+    
+    # time2 = timeit.default_timer()
+    # timeAB = time2 - time1
+    # print('timeAB = {}'.format(timeAB))
 
     # Output the critical points in a file
     writer = vtk.vtkXMLPolyDataWriter()
@@ -73,6 +77,8 @@ def segmentation(flowFile, linesFile):
     linesReader.SetFileName(linesFile)
     linesReader.Update()
     separatrices = linesReader.GetOutput()
+    
+    # time1 = timeit.default_timer()
 
     # Get the four corner points from the input image
     imageReader = vtk.vtkXMLImageDataReader()
@@ -131,17 +137,27 @@ def segmentation(flowFile, linesFile):
     mergeClose.ToleranceIsAbsoluteOn()
     mergeClose.SetAbsoluteTolerance(0.5*dist)
     mergeClose.Update()
+    
+    # time2 = timeit.default_timer()
+    # timeB = time2 - time1
+    # print('timeB = {}'.format(timeB))
 
     # Output separatrices and boundary points in a file
     writer = vtk.vtkXMLPolyDataWriter()
     writer.SetInputData(mergeClose.GetOutput())
     writer.SetFileName(fname + "_separatricesPlusBoundary" + ".vtp");
     writer.Write()
+    
+    # time3 = timeit.default_timer()
 
     # Tessellate
     tess = vtk.vtkDelaunay2D()
     tess.SetInputConnection(mergeClose.GetOutputPort())
     tess.Update()
+    
+    # time4 = timeit.default_timer()
+    # timeC = time4 - time3
+    # print('timeC = {}'.format(timeC))
 
     # Color via connected regions
     conn = vtk.vtkPolyDataEdgeConnectivityFilter()
@@ -158,6 +174,10 @@ def segmentation(flowFile, linesFile):
     conn.ColorRegionsOn()
     conn.CellRegionAreasOn()
     conn.Update()
+    
+    # time5 = timeit.default_timer()
+    # timeD = time5 - time4
+    # print('timeD = {}'.format(timeD))
 
     # Transform input data to polydata for append to work
     geometry = vtk.vtkGeometryFilter()
@@ -209,6 +229,10 @@ def segmentation(flowFile, linesFile):
           if conn.GetOutput().GetCellData().HasArray('CellRegionArea'):
               regArea = conn.GetOutput().GetCellData().GetArray('CellRegionArea').GetTuple1(cell)
               regionArea.SetTuple1(c, regArea)
+    
+    # time6 = timeit.default_timer()
+    # timeE = time6 - time5
+    # print('timeE = {}'.format(timeE))
 
     # Output the result in a file
     writer = vtk.vtkXMLPolyDataWriter()
@@ -646,3 +670,50 @@ def flow_weighted_spacing(transectsFile, Npts=100):
     writer.SetInputData(transectsFlowWeighted)
     writer.SetFileName(fname + "FlowWeighted" + ".vtp");
     writer.Write()
+
+def streamlines_all_cells(flowFile, integrationStepSize=0.1, maxNumSteps=100,
+                          computeSurfaces=1, excludeBoundary=0,
+                          vectorName=None):
+
+    fname, fext = os.path.splitext(flowFile)
+    if fext == ".vti":
+        reader = vtk.vtkXMLImageDataReader()
+    elif fext == ".vtr":
+        reader = vtk.vtkXMLRectilinearGridReader()
+    elif fext == ".vtu":
+        reader = vtk.vtkXMLUnstructuredGridReader()
+    elif fext == ".vtk":
+        reader = vtk.vtkUnstructuredGridReader()
+    else:
+        raise ValueError("File extension not recognized.")
+
+    # Read the flow field
+    reader.SetFileName(flowFile)
+    reader.Update()
+    
+    # Get the cell centers
+    cellCenters = vtk.vtkCellCenters()
+    cellCenters.SetInputConnection(reader.GetOutputPort())
+    cellCenters.Update()
+    
+    # Filter to compute streamlines
+    tracer = vtk.vtkStreamTracer()
+    tracer.SetInputData(reader.GetOutput())
+    tracer.SetSourceData(cellCenters.GetOutput())
+    tracer.SetIntegratorTypeToRungeKutta4()
+    tracer.SetIntegrationDirectionToBoth()
+    tracer.SetIntegrationStepUnit(2); #  2 --> CELL_LENGTH_UNIT
+    tracer.SetInitialIntegrationStep(integrationStepSize)
+    tracer.SetMaximumNumberOfSteps(maxNumSteps)
+    # tracer.SetMaximumPropagation(dist * maxNumSteps)
+    # tracer.SetTerminalSpeed(terminalSpeed)
+    tracer.SetComputeVorticity(0)
+    if vectorName is not None:
+        tracer.SetInputArrayToProcess(0, 0, 0, vtk.vtkDataObject.FIELD_ASSOCIATION_POINTS, vectorName)
+    tracer.Update()
+
+    # # Output the streamlines in a file
+    # writer = vtk.vtkXMLPolyDataWriter()
+    # writer.SetInputData(tracer.GetOutput(0))
+    # writer.SetFileName(fname + "_streamlinesAllCells" + ".vtp");
+    # writer.Write()

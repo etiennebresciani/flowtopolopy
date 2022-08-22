@@ -1,8 +1,11 @@
 import os
 import flowtopolopy as ft
 
+def get_script_path():
+    return os.path.dirname(os.path.realpath(__file__))
+
 # Working folder and flow file
-work_folder = os.path.join(".", "test_Toth_2D")
+work_folder = os.path.join(get_script_path(), "test_Toth_2D")
 fname = 'q_vert'
 fext = '.vti'
 
@@ -26,3 +29,8 @@ ft.transects(segmentationFile=segmentationFile, linesFile=separatricesCleanFile,
 # Flow-equally-spaced points along transects
 transectsFile = os.path.join(work_folder, fname+'_segmentation_transects.vtp')
 ft.flow_weighted_spacing(transectsFile=transectsFile, Npts=100)
+
+# Calculate streamlines from all cells
+# (this is just to compare the computational efficiency with other methods)
+ft.streamlines_all_cells(flowFile=flowFile, integrationStepSize=0.1,
+                         maxNumSteps=10000)    

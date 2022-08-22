@@ -1,8 +1,11 @@
 import os
 import flowtopolopy as ft
 
+def get_script_path():
+    return os.path.dirname(os.path.realpath(__file__))
+
 # Working folder and flow file
-work_folder = os.path.join(".", "test_dipole_2D")
+work_folder = os.path.join(get_script_path(), "test_dipole_2D")
 fname = 'q_vert'
 fext = '.vti'
 
