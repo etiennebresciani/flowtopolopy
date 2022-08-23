@@ -5,7 +5,7 @@ def get_script_path():
     return os.path.dirname(os.path.realpath(__file__))
 
 # Working folder and flow file
-work_folder = os.path.join(get_script_path(), "test_Elder_compressible_2D")
+work_folder = os.path.join(get_script_path(), "Elder_compressible_2D_files")
 fname = 'q_vert'
 fext = '.vti'
 
