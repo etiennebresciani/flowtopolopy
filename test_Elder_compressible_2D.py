@@ -11,8 +11,8 @@ fext = '.vti'
 
 # Topology
 flowFile = os.path.join(work_folder, fname+fext)
-ft.topology(flowFile=flowFile, separatrixDist=0.1,
-            integrationStepSize=0.1, maxNumSteps=10000)
+ft.topology(flowFile=flowFile, integrationStepSize=0.1, maxNumSteps=10000,
+            separatrixDist=0.1)
 
 # Segmentation
 linesFile = os.path.join(work_folder, fname+'_separatrices.vtp')
