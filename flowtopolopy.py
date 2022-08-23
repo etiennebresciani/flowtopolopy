@@ -233,6 +233,10 @@ def segmentation(flowFile, linesFile):
     # time6 = timeit.default_timer()
     # timeE = time6 - time5
     # print('timeE = {}'.format(timeE))
+    
+    # Remove 'vtkValidPointMask' array, which otherwise causes problems later
+    # (when probing the velocity along the streamlines in transects function)
+    probe.GetOutput().GetPointData().RemoveArray('vtkValidPointMask')
 
     # Output the result in a file
     writer = vtk.vtkXMLPolyDataWriter()
@@ -354,6 +358,10 @@ def segmentation_simpler(flowFile, linesFile):
     probe.SetSourceData(imageReader.GetOutput())
     probe.PassCellArraysOn()
     probe.Update()
+    
+    # Remove 'vtkValidPointMask' array, which otherwise causes problems later
+    # (when probing the velocity along the streamlines in transects function)
+    probe.GetOutput().GetPointData().RemoveArray('vtkValidPointMask')
 
     # Output the result in a file
     writer = vtk.vtkXMLPolyDataWriter()
