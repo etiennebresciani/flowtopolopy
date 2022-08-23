@@ -21,8 +21,10 @@ ft.segmentation(flowFile=flowFile, linesFile=linesFile)
 
 # Transects
 segmentationFile = os.path.join(work_folder, fname+'_segmentation.vtp')
-separatricesCleanFile = os.path.join(work_folder, fname+'_separatricesClean.vtp')
-ft.transects(segmentationFile=segmentationFile, linesFile=separatricesCleanFile, tol=0.01,
+separatricesCleanFile = os.path.join(work_folder,
+                                     fname+'_separatricesClean.vtp')
+ft.transects(segmentationFile=segmentationFile,
+             linesFile=separatricesCleanFile, resolution=0.01,
              integrationStepSize=0.5, maxNumSteps=1000, terminalSpeed=1e-4)
 
 # Flow-equally-spaced points along transects
