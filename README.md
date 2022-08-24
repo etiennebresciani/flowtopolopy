@@ -39,6 +39,13 @@ console.
 Simply clone (or download) the package and add the ``/flowtopolopy`` directory
 to your PYTHONPATH.
 
+FlowTopoloPy relies on the VTK library accessed through its Python
+wrapper. Thus, you need to have that one installed. For this, you can simply
+download the VTK Python Wheel that suits your platform from the
+[VTK download page](https://vtk.org/download/) and install it with pip.
+
+FlowTopoloPy also requires NumPy.
+
 ## Authors
 
 * **Etienne Bresciani**
