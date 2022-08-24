@@ -1,7 +1,8 @@
 # FlowTopoloPy
 
-FlowTopoloPy ("Flow Topology Python") is a Python package to perform topology
-and topology-based analyses of flow fields.
+FlowTopoloPy ("Flow Topology Python") is a high-level Python package to perform
+topology and topology-based analyses of flow fields. Core tasks are performed
+by the VTK library.
 
 ## Functionalities
 
